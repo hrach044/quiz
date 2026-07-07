@@ -1,3 +1,6 @@
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -34,7 +37,11 @@ export function getPool(): pg.Pool | null {
       ssl: {
         rejectUnauthorized: false, // Required for Supabase/Render/Railway connections
       },
-    });
+      // Force IPv4 resolution to prevent ENETUNREACH errors on Render/Supabase (which has IPv6 records)
+      lookup: (hostname, options, callback) => {
+        dns.lookup(hostname, { ...options, family: 4 }, callback);
+      },
+    } as any);
   }
   return pool;
 }
