@@ -1,0 +1,6 @@
+{
+  "name": "Career Path Quiz",
+  "description": "AI-powered career guidance test with 20 questions tracking Tech, Analytics, Management, and Creative potential.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
