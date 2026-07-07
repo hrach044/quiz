@@ -159,6 +159,157 @@ function parseInlineFormatting(text: string) {
   return parts;
 }
 
+function renderLegacyPrettyProfile(text: string) {
+  if (!text) return null;
+
+  // Clean up initial quotes if any
+  let cleanText = text.replace(/^["'«\s]+|["'»\s]+$/g, '').trim();
+  if (cleanText.startsWith("Профессиональный профиль")) {
+    cleanText = cleanText.replace("Профессиональный профиль", "").trim();
+  }
+
+  // Split into sentences using a regex that handles Russian punctuation
+  const rawSentences = cleanText.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+
+  // Deduplicate sentences (normalized comparison)
+  const sentences: string[] = [];
+  const seen = new Set<string>();
+  for (const s of rawSentences) {
+    const norm = s.toLowerCase().replace(/[^a-zа-я0-9]/g, "");
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      sentences.push(s);
+    }
+  }
+
+  const portrait: string[] = [];
+  const strengths: string[] = [];
+  const advice: string[] = [];
+  const motivation: string[] = [];
+
+  const strengthKeywords = ["сила", "сильные стороны", "сильной стороной", "ценят", "умеете", "способность", "способны", "склонны", "склонность", "отличает", "преимущество", "баланс", "сочетает", "талант"];
+  const adviceKeywords = ["рекомендуется", "рекомендация", "совет", "фокусироваться", "направьте", "развитие", "развивайте", "инвестирование", "изменяйте", "изучайте", "стремитесь", "ориентируетесь", "важно понимать", "проектируйте", "создавайте", "стройте", "улучшайте", "оптимизируйте", "используйте", "начните", "начинайте"];
+  const motivationKeywords = ["желаем", "удачи", "успехов", "побед", "свершений", "верим", "получится", "действуйте", "смело", "вперед", "шедевр", "лучший", "верьте", "счастливы", "вдохновляйтесь", "поздравляем", "верны", "гордитесь", "растите", "преодолевайте", "экспертом", "доверяйте", "лидером", "призвание", "судьбы", "высоте", "звездам", "легендарным", "профессионалом", "поздравляем"];
+
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    const isShortExclamation = sentence.endsWith("!") && sentence.length < 50;
+
+    if (motivationKeywords.some(kw => lower.includes(kw)) || isShortExclamation) {
+      motivation.push(sentence);
+    } else if (adviceKeywords.some(kw => lower.includes(kw))) {
+      advice.push(sentence);
+    } else if (strengthKeywords.some(kw => lower.includes(kw))) {
+      strengths.push(sentence);
+    } else {
+      portrait.push(sentence);
+    }
+  }
+
+  // Cap lengths for perfect UI aesthetics & to prevent visual clutter
+  const cappedPortrait = portrait.slice(0, 4).join(" ");
+  const cappedStrengths = strengths.slice(0, 5);
+  const cappedAdvice = advice.slice(0, 5);
+  const cappedMotivation = motivation.slice(0, 4);
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Психологический портрет */}
+      {cappedPortrait && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="p-6 md:p-8 rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-md relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center gap-2.5 mb-4 text-sm font-semibold uppercase tracking-wider text-indigo-400 font-mono">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            Профессиональный портрет
+          </div>
+          <p className="text-slate-200 text-base md:text-lg leading-relaxed italic border-l-2 border-indigo-500/50 pl-4 py-1">
+            "{cappedPortrait}"
+          </p>
+        </motion.div>
+      )}
+
+      {/* 2. Ключевые сильные стороны */}
+      {cappedStrengths.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="p-6 md:p-8 rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2.5 mb-5 text-sm font-semibold uppercase tracking-wider text-indigo-400 font-mono">
+            <Target className="w-4 h-4" />
+            Ваши сильные стороны
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {cappedStrengths.map((strength, idx) => (
+              <div key={idx} className="p-4 bg-slate-950/30 border border-slate-800/40 rounded-xl flex items-start gap-3 hover:border-slate-800 transition">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <span className="text-sm text-slate-300 leading-relaxed">{strength}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 3. Советы по развитию и шаги */}
+      {cappedAdvice.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="p-6 md:p-8 rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2.5 mb-5 text-sm font-semibold uppercase tracking-wider text-indigo-400 font-mono">
+            <Lightbulb className="w-4 h-4" />
+            Рекомендации по развитию
+          </div>
+          <div className="space-y-4">
+            {cappedAdvice.map((adv, idx) => (
+              <div key={idx} className="flex items-start gap-4 p-4 bg-slate-950/20 rounded-xl border border-slate-800/20 hover:border-slate-800/50 transition">
+                <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 font-mono text-sm font-bold flex items-center justify-center shrink-0">
+                  {idx + 1}
+                </div>
+                <p className="text-slate-300 text-sm md:text-base leading-relaxed">{adv}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 4. Вдохновение и мотивация */}
+      {cappedMotivation.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="p-6 md:p-8 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-slate-900/40 via-indigo-950/5 to-slate-900/40 backdrop-blur-md relative overflow-hidden"
+        >
+          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none animate-pulse" />
+          <div className="flex items-center gap-2.5 mb-4 text-sm font-semibold uppercase tracking-wider text-indigo-400 font-mono">
+            <Compass className="w-4 h-4" />
+            Вдохновение и мотивация
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            {cappedMotivation.map((mot, idx) => (
+              <span
+                key={idx}
+                className="px-4 py-2.5 bg-indigo-500/5 border border-indigo-500/10 text-indigo-200 text-sm font-medium rounded-xl hover:bg-indigo-500/10 hover:border-indigo-500/20 transition duration-200"
+              >
+                {mot}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 export default function ResultView({ result, onRestart, onLogout }: ResultViewProps) {
   const meta = CATEGORY_META[result.primaryCategory] || CATEGORY_META.tech;
   const ActiveIcon = meta.icon;
@@ -549,57 +700,8 @@ export default function ResultView({ result, onRestart, onLogout }: ResultViewPr
               )}
             </div>
           ) : (
-            // GRACEFUL FALLBACK TO PRETTY CUSTOM MARKDOWN RENDERER
-            <div className="space-y-6">
-              {/* Detailed Explanation */}
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="p-6 md:p-8 rounded-2xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md relative overflow-hidden"
-              >
-                <div className="flex items-center gap-2.5 mb-6 text-sm font-semibold uppercase tracking-wider text-indigo-400 font-mono">
-                  <Sparkles className="w-4 h-4" />
-                  Подробный ИИ-анализ личности
-                </div>
-
-                <div className="prose prose-invert max-w-none">
-                  {renderCustomMarkdown(result.aiExplanation)}
-                </div>
-              </motion.div>
-
-              {/* Core Recommendations / Jobs */}
-              {result.recommendations && result.recommendations.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.3 }}
-                  className="p-6 md:p-8 rounded-2xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md"
-                >
-                  <h3 className="text-lg font-bold text-white tracking-tight mb-6 flex items-center gap-2">
-                    Рекомендованные карьерные пути
-                  </h3>
-
-                  <div className="space-y-4">
-                    {result.recommendations.map((rec, idx) => (
-                      <div
-                        key={idx}
-                        className="p-4 bg-slate-950/40 hover:bg-slate-950/70 border border-slate-800/60 hover:border-slate-700/80 rounded-xl transition duration-200 flex items-start gap-4"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 font-mono text-sm font-bold flex items-center justify-center shrink-0 mt-0.5">
-                          {idx + 1}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-slate-200 text-sm md:text-base leading-relaxed">
-                            {rec}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </div>
+            // GRACEFUL FALLBACK TO PRETTY STRUCTURED RENDERER FOR RAW TEXT / LEGACY ANSWERS
+            renderLegacyPrettyProfile(result.aiExplanation)
           )}
         </div>
       </div>
