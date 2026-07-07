@@ -281,7 +281,8 @@ ${answers.map(ans => {
 
 Пожалуйста, сделай глубокий психологический и карьерный анализ результатов и верни строго структурированный JSON-ответ на русском языке.`;
 
-    const response = await ai.models.generateContent({
+    // Introduce a strict 15-second timeout for the Gemini API call to prevent infinite spinner/hangs
+    const geminiPromise = ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: prompt,
       config: {
@@ -335,6 +336,12 @@ ${answers.map(ans => {
         }
       }
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), 15000)
+    );
+
+    const response = await Promise.race([geminiPromise, timeoutPromise]);
 
     const parsedResponse = JSON.parse(response.text || "{}");
     const serializedJson = JSON.stringify(parsedResponse);

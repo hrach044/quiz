@@ -31,12 +31,15 @@ export function getIsPostgres(): boolean {
 export function getPool(): pg.Pool | null {
   if (!getIsPostgres()) return null;
   if (!pool) {
-    console.log("Initializing Supabase/PostgreSQL Connection Pool...");
+    console.log("Initializing Supabase/PostgreSQL Connection Pool with timeouts...");
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: {
         rejectUnauthorized: false, // Required for Supabase/Render/Railway connections
       },
+      connectionTimeoutMillis: 5000, // 5 seconds to connect
+      query_timeout: 10000,          // 10 seconds query timeout
+      idleTimeoutMillis: 10000,      // 10 seconds idle timeout
       // Force IPv4 resolution to prevent ENETUNREACH errors on Render/Supabase (which has IPv6 records)
       lookup: (hostname, options, callback) => {
         dns.lookup(hostname, { ...options, family: 4 }, callback);
@@ -130,130 +133,162 @@ export async function getUserByEmail(email: string): Promise<(User & { passwordH
   const normEmail = email.toLowerCase().trim();
 
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (dbPool) {
-      const res = await dbPool.query("SELECT * FROM users WHERE LOWER(email) = $1", [normEmail]);
-      if (res.rows.length > 0) {
-        const row = res.rows[0];
-        return {
-          id: row.id,
-          email: row.email,
-          passwordHash: row.password_hash,
-        };
+    try {
+      const dbPool = getPool();
+      if (dbPool) {
+        const res = await dbPool.query("SELECT * FROM users WHERE LOWER(email) = $1", [normEmail]);
+        if (res.rows.length > 0) {
+          const row = res.rows[0];
+          return {
+            id: row.id,
+            email: row.email,
+            passwordHash: row.password_hash,
+          };
+        }
       }
+      return null;
+    } catch (err) {
+      console.error("Postgres error in getUserByEmail, falling back to local file DB:", err);
     }
-    return null;
-  } else {
-    const db = readLocalDb();
-    const found = db.users.find((u) => u.email.toLowerCase() === normEmail);
-    return found || null;
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  const found = db.users.find((u) => u.email.toLowerCase() === normEmail);
+  return found || null;
 }
 
 export async function getUserById(id: string): Promise<User | null> {
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (dbPool) {
-      const res = await dbPool.query("SELECT * FROM users WHERE id = $1", [id]);
-      if (res.rows.length > 0) {
-        const row = res.rows[0];
-        return {
-          id: row.id,
-          email: row.email,
-        };
+    try {
+      const dbPool = getPool();
+      if (dbPool) {
+        const res = await dbPool.query("SELECT * FROM users WHERE id = $1", [id]);
+        if (res.rows.length > 0) {
+          const row = res.rows[0];
+          return {
+            id: row.id,
+            email: row.email,
+          };
+        }
       }
+      return null;
+    } catch (err) {
+      console.error("Postgres error in getUserById, falling back to local file DB:", err);
     }
-    return null;
-  } else {
-    const db = readLocalDb();
-    const found = db.users.find((u) => u.id === id);
-    if (found) {
-      return { id: found.id, email: found.email };
-    }
-    return null;
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  const found = db.users.find((u) => u.id === id);
+  if (found) {
+    return { id: found.id, email: found.email };
+  }
+  return null;
 }
 
 export async function createUser(id: string, email: string, passwordHash: string): Promise<User> {
   const normEmail = email.toLowerCase().trim();
 
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (!dbPool) throw new Error("Database pool is not initialized");
-    await dbPool.query(
-      "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)",
-      [id, normEmail, passwordHash]
-    );
-    return { id, email: normEmail };
-  } else {
-    const db = readLocalDb();
-    const newUser = { id, email: normEmail, passwordHash };
-    db.users.push(newUser);
-    writeLocalDb(db);
-    return { id, email: normEmail };
+    try {
+      const dbPool = getPool();
+      if (!dbPool) throw new Error("Database pool is not initialized");
+      await dbPool.query(
+        "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)",
+        [id, normEmail, passwordHash]
+      );
+      return { id, email: normEmail };
+    } catch (err) {
+      console.error("Postgres error in createUser, falling back to local file DB:", err);
+    }
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  const newUser = { id, email: normEmail, passwordHash };
+  db.users.push(newUser);
+  writeLocalDb(db);
+  return { id, email: normEmail };
 }
 
 export async function getQuizResult(userId: string): Promise<CareerResult | null> {
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (dbPool) {
-      const res = await dbPool.query("SELECT * FROM quiz_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1", [userId]);
-      if (res.rows.length > 0) {
-        const row = res.rows[0];
-        return {
-          userId: row.user_id,
-          scores: row.scores,
-          primaryCategory: row.primary_category,
-          aiExplanation: row.ai_explanation,
-          recommendations: row.recommendations,
-          createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-        };
+    try {
+      const dbPool = getPool();
+      if (dbPool) {
+        const res = await dbPool.query("SELECT * FROM quiz_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1", [userId]);
+        if (res.rows.length > 0) {
+          const row = res.rows[0];
+          return {
+            userId: row.user_id,
+            scores: row.scores,
+            primaryCategory: row.primary_category,
+            aiExplanation: row.ai_explanation,
+            recommendations: row.recommendations,
+            createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          };
+        }
       }
+      return null;
+    } catch (err) {
+      console.error("Postgres error in getQuizResult, falling back to local file DB:", err);
     }
-    return null;
-  } else {
-    const db = readLocalDb();
-    return db.results[userId] || null;
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  return db.results[userId] || null;
 }
 
 export async function saveQuizResult(userId: string, result: CareerResult): Promise<void> {
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (!dbPool) throw new Error("Database pool is not initialized");
+    try {
+      const dbPool = getPool();
+      if (!dbPool) throw new Error("Database pool is not initialized");
 
-    // Check if result already exists to perform upsert or delete + insert
-    await dbPool.query("DELETE FROM quiz_results WHERE user_id = $1", [userId]);
-    await dbPool.query(
-      `INSERT INTO quiz_results (user_id, scores, primary_category, ai_explanation, recommendations)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        userId,
-        JSON.stringify(result.scores),
-        result.primaryCategory,
-        result.aiExplanation,
-        JSON.stringify(result.recommendations),
-      ]
-    );
-  } else {
-    const db = readLocalDb();
-    db.results[userId] = result;
-    writeLocalDb(db);
+      // Check if result already exists to perform upsert or delete + insert
+      await dbPool.query("DELETE FROM quiz_results WHERE user_id = $1", [userId]);
+      await dbPool.query(
+        `INSERT INTO quiz_results (user_id, scores, primary_category, ai_explanation, recommendations)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          userId,
+          JSON.stringify(result.scores),
+          result.primaryCategory,
+          result.aiExplanation,
+          JSON.stringify(result.recommendations),
+        ]
+      );
+      return;
+    } catch (err) {
+      console.error("Postgres error in saveQuizResult, falling back to local file DB:", err);
+    }
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  db.results[userId] = result;
+  writeLocalDb(db);
 }
 
 export async function deleteQuizResult(userId: string): Promise<void> {
   if (getIsPostgres()) {
-    const dbPool = getPool();
-    if (dbPool) {
-      await dbPool.query("DELETE FROM quiz_results WHERE user_id = $1", [userId]);
+    try {
+      const dbPool = getPool();
+      if (dbPool) {
+        await dbPool.query("DELETE FROM quiz_results WHERE user_id = $1", [userId]);
+        return;
+      }
+    } catch (err) {
+      console.error("Postgres error in deleteQuizResult, falling back to local file DB:", err);
     }
-  } else {
-    const db = readLocalDb();
-    delete db.results[userId];
-    writeLocalDb(db);
   }
+
+  // Fallback to local file DB
+  const db = readLocalDb();
+  delete db.results[userId];
+  writeLocalDb(db);
 }
 
 // Deprecated legacy synchronous signatures kept for safety/compatibility (return empty/local data)
